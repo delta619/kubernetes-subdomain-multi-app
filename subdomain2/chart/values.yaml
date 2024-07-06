@@ -1,0 +1,5 @@
+appName: APP_NAME_ON_SUBDOMAIN_2
+imageName: delta619/<Image1>:latest
+replicaCount: 1
+serviceName: APP_NAME_ON_SUBDOMAIN_2-service
+serviceSourcePort: 3001

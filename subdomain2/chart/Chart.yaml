@@ -1,0 +1,6 @@
+apiVersion: v2
+name: APP_NAME on subdomain 2
+version: 1.0.0
+deprecated: false
+appVersion: 1.0.0
+description: "App_name desc for company2"
