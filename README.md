@@ -1,4 +1,4 @@
-Welcome to my repo about Kubernetes.
+THanks for checking out this template tool for Kubernetes.
 In this repo, the skeleton of this infra would be able to deploy multiple services or apps having different subdomain yet same domain name. eg. 
 - walmart.wd5.myworkdayjobs.com -> springboot application
 - quickenloans.wd5.myworkdayjobs.com -> node application
