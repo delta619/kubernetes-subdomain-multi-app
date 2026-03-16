@@ -9,12 +9,10 @@ image:
 replicaCount: 1
 
 service:
-  port: 8080         # port your Go app listens on
+  port: 8000
 
-# Environment variables injected into the container
 env:
-  GIN_MODE: release  # or whatever env vars your Go app needs
-  PORT: "8080"
+  PORT: "8000"
   # DATABASE_URL: "" # set via --set env.DATABASE_URL=... in CI
 
 resources:

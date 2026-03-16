@@ -26,7 +26,7 @@ spec:
               service:
                 name: pulse-backend-service
                 port:
-                  number: 8080
+                  number: 8000
     # Duplicate this block for each additional app:
     # - host: api.tipsytypes.com
     #   http:
