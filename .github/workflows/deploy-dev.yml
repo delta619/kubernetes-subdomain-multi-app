@@ -12,31 +12,32 @@ on:
         description: "App GitHub repo (e.g. delta619/daily-pulse)"
         required: true
       ref:
-        description: "Git SHA or branch to build"
+        description: "Git branch to build"
         required: true
         default: "main"
 
-env:
-  AWS_REGION:  ap-south-1
-  ECR_REGISTRY: 436630933245.dkr.ecr.ap-south-1.amazonaws.com
-  APP:  ${{ github.event.client_payload.app  || github.event.inputs.app }}
-  REPO: ${{ github.event.client_payload.repo || github.event.inputs.repo }}
-  REF:  ${{ github.event.client_payload.ref  || github.event.inputs.ref }}
-
 jobs:
   build-and-deploy:
-    name: Build ${{ github.event.client_payload.app || github.event.inputs.app }} → dev
+    name: Build & deploy to dev
     runs-on: ubuntu-latest
     environment: dev
 
     steps:
+      - name: Set variables
+        id: vars
+        run: |
+          echo "app=${{ github.event.client_payload.app || github.event.inputs.app }}" >> $GITHUB_OUTPUT
+          echo "repo=${{ github.event.client_payload.app_repo || github.event.inputs.repo }}" >> $GITHUB_OUTPUT
+          echo "ref=${{ github.event.client_payload.ref || github.event.inputs.ref || 'main' }}" >> $GITHUB_OUTPUT
+          echo "registry=436630933245.dkr.ecr.ap-south-1.amazonaws.com" >> $GITHUB_OUTPUT
+
       - name: Checkout infra repo
         uses: actions/checkout@v4
 
       - name: Checkout app repo
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.event.client_payload.app_repo || github.event.inputs.repo }}
+          repository: ${{ steps.vars.outputs.repo }}
           ref: main
           token: ${{ secrets.INFRA_REPO_TOKEN }}
           path: app-source
@@ -46,7 +47,7 @@ jobs:
         with:
           aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region:            ${{ env.AWS_REGION }}
+          aws-region:            ap-south-1
 
       - name: Login to ECR
         uses: aws-actions/amazon-ecr-login@v2
@@ -54,7 +55,7 @@ jobs:
       - name: Build & push image
         id: build
         run: |
-          IMAGE=${{ env.ECR_REGISTRY }}/${{ env.APP }}:${{ env.REF }}
+          IMAGE=${{ steps.vars.outputs.registry }}/${{ steps.vars.outputs.app }}:${{ steps.vars.outputs.ref }}
           docker build -t $IMAGE ./app-source
           docker push $IMAGE
           echo "image=$IMAGE" >> $GITHUB_OUTPUT
@@ -74,16 +75,14 @@ jobs:
             IMAGE_REPO=$(echo "$IMAGE" | cut -d: -f1)
             IMAGE_TAG=$(echo "$IMAGE" | cut -d: -f2)
 
-            # Log in to ECR from EC2
             aws ecr get-login-password --region ap-south-1 \
               | docker login --username AWS --password-stdin \
                 436630933245.dkr.ecr.ap-south-1.amazonaws.com
 
-            helm upgrade --install ${{ env.APP }} ./${{ env.APP }}/chart \
+            helm upgrade --install ${{ steps.vars.outputs.app }} ./${{ steps.vars.outputs.app }}/chart \
               --set image.repository="$IMAGE_REPO" \
               --set image.tag="$IMAGE_TAG" \
               --set image.pullPolicy=Always \
               --atomic --timeout 3m
 
-            echo "Deployed ${{ env.APP }} to dev"
-            kubectl get pods -l app=${{ env.APP }}
+            kubectl get pods -l app=${{ steps.vars.outputs.app }}
