@@ -9,7 +9,7 @@ on:
         description: "App name (e.g. pulse-backend)"
         required: true
       repo:
-        description: "App GitHub repo URL"
+        description: "App GitHub repo (e.g. delta619/daily-pulse)"
         required: true
       ref:
         description: "Git SHA or branch to build"
@@ -36,8 +36,9 @@ jobs:
       - name: Checkout app repo
         uses: actions/checkout@v4
         with:
-          repository: ${{ env.REPO == 'https://github.com/delta619/daily-pulse' && 'delta619/daily-pulse' || env.REPO }}
-          ref: ${{ env.REF }}
+          repository: ${{ github.event.client_payload.app_repo || github.event.inputs.repo }}
+          ref: main
+          token: ${{ secrets.INFRA_REPO_TOKEN }}
           path: app-source
 
       - name: Configure AWS credentials
