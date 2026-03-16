@@ -1,77 +1,88 @@
-name: Deploy to Dev
-
-# Triggered automatically when an app repo pushes a new image.
-# App repos call this via repository_dispatch after building their Docker image.
-#
-# Example from an app repo:
-#   - uses: peter-evans/repository-dispatch@v3
-#     with:
-#       token: ${{ secrets.INFRA_REPO_TOKEN }}
-#       repository: YOUR_ORG/kubernetes-subdomain-multi-app
-#       event-type: deploy-dev
-#       client-payload: |
-#         { "app": "pulse-backend", "image": "123456.dkr.ecr.us-east-1.amazonaws.com/pulse-backend:abc123" }
+name: Build & Deploy to Dev
 
 on:
   repository_dispatch:
-    types: [deploy-dev]
-
-  # Also allow manual trigger for testing
+    types: [build-and-deploy-dev]
   workflow_dispatch:
     inputs:
       app:
-        description: "App chart directory name (e.g. pulse-backend, subdomain1)"
+        description: "App name (e.g. pulse-backend)"
         required: true
-      image:
-        description: "Full Docker image URI with tag (e.g. 123456.dkr.ecr.us-east-1.amazonaws.com/pulse-backend:sha)"
+      repo:
+        description: "App GitHub repo URL"
         required: true
+      ref:
+        description: "Git SHA or branch to build"
+        required: true
+        default: "main"
+
+env:
+  AWS_REGION:  ap-south-1
+  ECR_REGISTRY: 436630933245.dkr.ecr.ap-south-1.amazonaws.com
+  APP:  ${{ github.event.client_payload.app  || github.event.inputs.app }}
+  REPO: ${{ github.event.client_payload.repo || github.event.inputs.repo }}
+  REF:  ${{ github.event.client_payload.ref  || github.event.inputs.ref }}
 
 jobs:
-  deploy:
-    name: Deploy ${{ github.event.client_payload.app || github.event.inputs.app }} → dev
+  build-and-deploy:
+    name: Build ${{ github.event.client_payload.app || github.event.inputs.app }} → dev
     runs-on: ubuntu-latest
     environment: dev
 
-    env:
-      APP:   ${{ github.event.client_payload.app   || github.event.inputs.app }}
-      IMAGE: ${{ github.event.client_payload.image || github.event.inputs.image }}
-
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout infra repo
+        uses: actions/checkout@v4
+
+      - name: Checkout app repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.REPO == 'https://github.com/delta619/daily-pulse' && 'delta619/daily-pulse' || env.REPO }}
+          ref: ${{ env.REF }}
+          path: app-source
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & push image
+        id: build
+        run: |
+          IMAGE=${{ env.ECR_REGISTRY }}/${{ env.APP }}:${{ env.REF }}
+          docker build -t $IMAGE ./app-source
+          docker push $IMAGE
+          echo "image=$IMAGE" >> $GITHUB_OUTPUT
 
       - name: Deploy to dev EC2
         uses: appleboy/ssh-action@v1
         with:
-          host:        ${{ secrets.DEV_EC2_HOST }}
-          username:    ubuntu
-          key:         ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-          timeout:     120s
+          host:     ${{ secrets.DEV_EC2_HOST }}
+          username: ubuntu
+          key:      ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          timeout:  120s
           script: |
             set -e
+            cd /home/ubuntu/infra && git pull
 
-            # Pull latest infra repo (helm charts)
-            cd /home/ubuntu/infra
-            git pull origin main
-
-            # Parse image parts: repo and tag
-            IMAGE="${{ env.IMAGE }}"
+            IMAGE="${{ steps.build.outputs.image }}"
             IMAGE_REPO=$(echo "$IMAGE" | cut -d: -f1)
             IMAGE_TAG=$(echo "$IMAGE" | cut -d: -f2)
 
-            # Helm upgrade (or install if first time)
-            helm upgrade --install \
-              "${{ env.APP }}" \
-              "./${{ env.APP }}/chart" \
+            # Log in to ECR from EC2
+            aws ecr get-login-password --region ap-south-1 \
+              | docker login --username AWS --password-stdin \
+                436630933245.dkr.ecr.ap-south-1.amazonaws.com
+
+            helm upgrade --install ${{ env.APP }} ./${{ env.APP }}/chart \
               --set image.repository="$IMAGE_REPO" \
               --set image.tag="$IMAGE_TAG" \
-              --set environment=dev \
-              --atomic \
-              --timeout 3m
+              --set image.pullPolicy=Always \
+              --atomic --timeout 3m
 
-            echo "Deployed ${{ env.APP }}:$IMAGE_TAG to dev"
+            echo "Deployed ${{ env.APP }} to dev"
             kubectl get pods -l app=${{ env.APP }}
-
-      - name: Report status
-        if: always()
-        run: |
-          echo "Deploy of ${{ env.APP }} to dev: ${{ job.status }}"
