@@ -1,0 +1,93 @@
+# COPY THIS FILE into each of your app repos as .github/workflows/deploy.yml
+# It builds the Docker image, pushes to ECR, then triggers this infra repo to deploy.
+#
+# Required GitHub Secrets in each app repo:
+#   AWS_ACCESS_KEY_ID
+#   AWS_SECRET_ACCESS_KEY
+#   ECR_REGISTRY          — e.g. 123456789.dkr.ecr.us-east-1.amazonaws.com
+#   ECR_REPOSITORY        — e.g. pulse-backend
+#   INFRA_REPO_TOKEN      — GitHub PAT with repo scope (to trigger infra repo workflow)
+#   INFRA_REPO            — e.g. YOUR_ORG/kubernetes-subdomain-multi-app
+
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]        # → auto-deploy to dev
+  release:
+    types: [published]      # → deploy to prod
+
+env:
+  AWS_REGION: ap-south-1
+
+jobs:
+  build-and-push:
+    name: Build & push image
+    runs-on: ubuntu-latest
+
+    outputs:
+      image: ${{ steps.build.outputs.image }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag & push Docker image
+        id: build
+        env:
+          REGISTRY:   ${{ secrets.ECR_REGISTRY }}
+          REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          IMAGE_TAG:  ${{ github.sha }}
+        run: |
+          docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
+          docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+          echo "image=$REGISTRY/$REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+  deploy-dev:
+    name: Deploy to dev
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Trigger infra repo deploy-dev
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token:      ${{ secrets.INFRA_REPO_TOKEN }}
+          repository: ${{ secrets.INFRA_REPO }}
+          event-type: deploy-dev
+          client-payload: |
+            {
+              "app":   "${{ secrets.ECR_REPOSITORY }}",
+              "image": "${{ needs.build-and-push.outputs.image }}"
+            }
+
+  deploy-prod:
+    name: Deploy to prod
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.event_name == 'release' && github.event.action == 'published'
+    environment: prod   # requires manual approval if configured
+
+    steps:
+      - name: Trigger infra repo deploy-prod
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token:      ${{ secrets.INFRA_REPO_TOKEN }}
+          repository: ${{ secrets.INFRA_REPO }}
+          event-type: deploy-prod
+          client-payload: |
+            {
+              "app":   "${{ secrets.ECR_REPOSITORY }}",
+              "image": "${{ needs.build-and-push.outputs.image }}"
+            }

@@ -1,0 +1,77 @@
+name: Deploy to Dev
+
+# Triggered automatically when an app repo pushes a new image.
+# App repos call this via repository_dispatch after building their Docker image.
+#
+# Example from an app repo:
+#   - uses: peter-evans/repository-dispatch@v3
+#     with:
+#       token: ${{ secrets.INFRA_REPO_TOKEN }}
+#       repository: YOUR_ORG/kubernetes-subdomain-multi-app
+#       event-type: deploy-dev
+#       client-payload: |
+#         { "app": "pulse-backend", "image": "123456.dkr.ecr.us-east-1.amazonaws.com/pulse-backend:abc123" }
+
+on:
+  repository_dispatch:
+    types: [deploy-dev]
+
+  # Also allow manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "App chart directory name (e.g. pulse-backend, subdomain1)"
+        required: true
+      image:
+        description: "Full Docker image URI with tag (e.g. 123456.dkr.ecr.us-east-1.amazonaws.com/pulse-backend:sha)"
+        required: true
+
+jobs:
+  deploy:
+    name: Deploy ${{ github.event.client_payload.app || github.event.inputs.app }} → dev
+    runs-on: ubuntu-latest
+    environment: dev
+
+    env:
+      APP:   ${{ github.event.client_payload.app   || github.event.inputs.app }}
+      IMAGE: ${{ github.event.client_payload.image || github.event.inputs.image }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to dev EC2
+        uses: appleboy/ssh-action@v1
+        with:
+          host:        ${{ secrets.DEV_EC2_HOST }}
+          username:    ubuntu
+          key:         ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          timeout:     120s
+          script: |
+            set -e
+
+            # Pull latest infra repo (helm charts)
+            cd /home/ubuntu/infra
+            git pull origin main
+
+            # Parse image parts: repo and tag
+            IMAGE="${{ env.IMAGE }}"
+            IMAGE_REPO=$(echo "$IMAGE" | cut -d: -f1)
+            IMAGE_TAG=$(echo "$IMAGE" | cut -d: -f2)
+
+            # Helm upgrade (or install if first time)
+            helm upgrade --install \
+              "${{ env.APP }}" \
+              "./${{ env.APP }}/chart" \
+              --set image.repository="$IMAGE_REPO" \
+              --set image.tag="$IMAGE_TAG" \
+              --set environment=dev \
+              --atomic \
+              --timeout 3m
+
+            echo "Deployed ${{ env.APP }}:$IMAGE_TAG to dev"
+            kubectl get pods -l app=${{ env.APP }}
+
+      - name: Report status
+        if: always()
+        run: |
+          echo "Deploy of ${{ env.APP }} to dev: ${{ job.status }}"

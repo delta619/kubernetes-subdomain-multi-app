@@ -1,0 +1,106 @@
+name: Deploy to Production
+
+# One-click production deploy:
+#   1. Go to Actions tab → "Deploy to Production" → Run workflow
+#   2. Enter app name and image tag confirmed from dev
+#
+# Requires a manual approval gate — configure a "prod" environment in
+# GitHub repo Settings → Environments → prod → Required reviewers.
+
+on:
+  repository_dispatch:
+    types: [deploy-prod]
+
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "App chart directory name (e.g. pulse-backend)"
+        required: true
+      image:
+        description: "Full Docker image URI with tag (MUST be same as tested on dev)"
+        required: true
+      confirm:
+        description: 'Type "deploy-to-prod" to confirm'
+        required: true
+
+jobs:
+  gate:
+    name: Safety check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm deploy intent
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "deploy-to-prod" ]; then
+            echo "Confirmation text did not match. Aborting."
+            exit 1
+          fi
+          echo "Confirmation OK — proceeding to prod deploy"
+
+  deploy:
+    name: Deploy ${{ github.event.inputs.app }} → prod
+    runs-on: ubuntu-latest
+    needs: gate
+    environment: prod   # <-- enables required reviewer approval in GitHub
+
+    env:
+      APP:   ${{ github.event.client_payload.app   || github.event.inputs.app }}
+      IMAGE: ${{ github.event.client_payload.image || github.event.inputs.image }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to prod EC2
+        uses: appleboy/ssh-action@v1
+        with:
+          host:        ${{ secrets.PROD_EC2_HOST }}
+          username:    ubuntu
+          key:         ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          timeout:     180s
+          script: |
+            set -e
+
+            cd /home/ubuntu/infra
+            git pull origin main
+
+            IMAGE="${{ env.IMAGE }}"
+            IMAGE_REPO=$(echo "$IMAGE" | cut -d: -f1)
+            IMAGE_TAG=$(echo "$IMAGE" | cut -d: -f2)
+
+            helm upgrade --install \
+              "${{ env.APP }}" \
+              "./${{ env.APP }}/chart" \
+              --set image.repository="$IMAGE_REPO" \
+              --set image.tag="$IMAGE_TAG" \
+              --set environment=prod \
+              --atomic \
+              --timeout 5m
+
+            echo "Deployed ${{ env.APP }}:$IMAGE_TAG to PROD"
+            kubectl get pods -l app=${{ env.APP }}
+
+      - name: Tag image as prod in ECR
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ap-south-1
+
+      - name: Re-tag image as prod-latest
+        run: |
+          IMAGE="${{ env.IMAGE }}"
+          REGISTRY=$(echo "$IMAGE" | cut -d/ -f1)
+          REPO=$(echo "$IMAGE" | cut -d/ -f2 | cut -d: -f1)
+          TAG=$(echo "$IMAGE" | cut -d: -f2)
+
+          MANIFEST=$(aws ecr batch-get-image \
+            --repository-name "$REPO" \
+            --image-ids imageTag="$TAG" \
+            --query 'images[0].imageManifest' \
+            --output text)
+
+          aws ecr put-image \
+            --repository-name "$REPO" \
+            --image-tag "prod-latest" \
+            --image-manifest "$MANIFEST" || true
+
+          echo "Tagged $REPO:$TAG as prod-latest"
