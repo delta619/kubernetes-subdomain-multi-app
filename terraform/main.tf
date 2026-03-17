@@ -26,8 +26,8 @@ locals {
   env = terraform.workspace # "dev" or "prod"
 
   instance_type = {
-    dev  = "t3.small"
-    prod = "t3.medium"
+    dev  = "t3.medium"
+    prod = "t3.large"
   }
 
   disk_size = {
