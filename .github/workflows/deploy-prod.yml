@@ -90,6 +90,7 @@ jobs:
               --set imagePullSecret=ecr-secret \
               --set env.ADMIN_USERNAME=${{ secrets.ADMIN_USERNAME }} \
               --set env.ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }} \
+              --set env.APP_ENV=production \
               --timeout 10m
 
             echo "Deployed ${{ env.APP }}:$IMAGE_TAG to prod"

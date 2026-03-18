@@ -97,6 +97,7 @@ jobs:
               --set imagePullSecret=ecr-secret \
               --set env.ADMIN_USERNAME=${{ secrets.ADMIN_USERNAME }} \
               --set env.ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }} \
+              --set env.APP_ENV=dev \
               --timeout 10m
 
             kubectl get pods -n dev -l app=${{ steps.vars.outputs.app }}
