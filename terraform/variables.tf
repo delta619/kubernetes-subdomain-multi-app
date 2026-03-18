@@ -15,6 +15,12 @@ variable "ssh_public_key" {
   type        = string
 }
 
+variable "ecr_repos" {
+  description = "List of ECR repository names to create"
+  type        = list(string)
+  default     = ["pulse-backend", "reflct"]
+}
+
 variable "infra_repo_url" {
   description = "HTTPS URL of this infra repo (cloned onto EC2 for helm charts)"
   type        = string

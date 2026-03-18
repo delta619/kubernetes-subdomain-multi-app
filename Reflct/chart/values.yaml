@@ -1,0 +1,22 @@
+appName: reflct
+
+image:
+  repository: 436630933245.dkr.ecr.ap-south-1.amazonaws.com/reflct
+  tag: latest
+  pullPolicy: Always
+
+replicaCount: 1
+
+service:
+  port: 80
+
+env:
+  APP_ENV: dev
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

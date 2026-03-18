@@ -11,6 +11,7 @@ spec:
   tls:
     - hosts:
         - pulse.dev.tipsytypes.com
+        - reflct.dev.tipsytypes.com
       secretName: apps-tls-dev
   rules:
     - host: pulse.dev.tipsytypes.com
@@ -23,3 +24,13 @@ spec:
                 name: pulse-backend-service
                 port:
                   number: 8000
+    - host: reflct.dev.tipsytypes.com
+      http:
+        paths:
+          - pathType: Prefix
+            path: "/"
+            backend:
+              service:
+                name: reflct-service
+                port:
+                  number: 80

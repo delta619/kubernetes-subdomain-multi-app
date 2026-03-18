@@ -143,6 +143,19 @@ resource "aws_eip" "k8s" {
   tags     = merge(local.common_tags, { Name = "${local.name_prefix}-eip" })
 }
 
+# ── ECR Repositories ─────────────────────────────────────────────────────────
+resource "aws_ecr_repository" "apps" {
+  for_each             = toset(var.ecr_repos)
+  name                 = each.key
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = merge(local.common_tags, { Name = each.key })
+}
+
 # ── Route53 ──────────────────────────────────────────────────────────────────
 data "aws_route53_zone" "main" {
   name = var.domain

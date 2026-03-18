@@ -22,3 +22,8 @@ output "wildcard_dns_dev" {
   description = "Wildcard DNS for dev (*.dev.tipsytypes.com)"
   value       = aws_route53_record.wildcard_dev.name
 }
+
+output "ecr_repository_urls" {
+  description = "ECR repository URLs"
+  value       = { for k, v in aws_ecr_repository.apps : k => v.repository_url }
+}
