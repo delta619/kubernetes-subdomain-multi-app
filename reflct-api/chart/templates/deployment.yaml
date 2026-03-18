@@ -39,8 +39,11 @@ spec:
               memory: {{ .Values.resources.limits.memory }}
           readinessProbe:
             httpGet:
-              path: /api/health/
+              path: /api/
               port: {{ .Values.service.port }}
+              httpHeaders:
+                - name: Host
+                  value: reflct-api.dev.tipsytypes.com
             initialDelaySeconds: 10
             periodSeconds: 10
 ---
