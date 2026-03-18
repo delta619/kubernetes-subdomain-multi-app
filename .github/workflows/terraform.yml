@@ -23,7 +23,7 @@ on:
         options: [plan, apply, destroy]
 
 env:
-  TF_WORKSPACE: ${{ github.event.inputs.environment || 'dev' }}
+  TF_ENV: ${{ github.event.inputs.environment || 'default' }}
 
 jobs:
   terraform:
@@ -53,7 +53,7 @@ jobs:
         run: terraform init
 
       - name: Select workspace
-        run: terraform workspace select ${{ env.TF_WORKSPACE }} || terraform workspace new ${{ env.TF_WORKSPACE }}
+        run: terraform workspace select ${{ env.TF_ENV }} || terraform workspace new ${{ env.TF_ENV }}
 
       - name: Terraform Plan
         run: |
