@@ -55,7 +55,7 @@ jobs:
       - name: Build & push image
         id: build
         run: |
-          IMAGE=${{ steps.vars.outputs.registry }}/${{ steps.vars.outputs.app }}:${{ steps.vars.outputs.ref }}
+          IMAGE=${{ steps.vars.outputs.registry }}/$(echo "${{ steps.vars.outputs.app }}" | tr '[:upper:]' '[:lower:]'):${{ steps.vars.outputs.ref }}
           docker build -t $IMAGE ./app-source
           docker push $IMAGE
           echo "image=$IMAGE" >> $GITHUB_OUTPUT
