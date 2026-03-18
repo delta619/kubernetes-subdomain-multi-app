@@ -72,6 +72,14 @@ jobs:
 
             kubectl create namespace prod --dry-run=client -o yaml | kubectl apply -f -
 
+            # Refresh ECR pull secret
+            kubectl create secret docker-registry ecr-secret \
+              --namespace prod \
+              --docker-server=436630933245.dkr.ecr.ap-south-1.amazonaws.com \
+              --docker-username=AWS \
+              --docker-password=$(aws ecr get-login-password --region ap-south-1) \
+              --dry-run=client -o yaml | kubectl apply -f -
+
             helm upgrade --install \
               "${{ env.APP }}" \
               "./${{ env.APP }}/chart" \
@@ -79,8 +87,10 @@ jobs:
               --set image.repository="$IMAGE_REPO" \
               --set image.tag="$IMAGE_TAG" \
               --set image.pullPolicy=Always \
-              --atomic \
-              --timeout 5m
+              --set imagePullSecret=ecr-secret \
+              --set env.ADMIN_USERNAME=${{ secrets.ADMIN_USERNAME }} \
+              --set env.ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }} \
+              --timeout 10m
 
             echo "Deployed ${{ env.APP }}:$IMAGE_TAG to prod"
             kubectl get pods -n prod -l app=${{ env.APP }}
