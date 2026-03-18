@@ -1,8 +1,14 @@
 
 #!/usr/bin/env make
 
-.PHONY: install_infra
+.PHONY: install_infra create-reflct-api-secrets
 
+
+create-reflct-api-secrets:
+	kubectl create secret generic reflct-api-secrets \
+		--namespace prod \
+		--from-env-file=../reflct-api/.env.dev \
+		--dry-run=client -o yaml | kubectl apply -f -
 
 install_infra:
 	kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.1.1/deploy/static/provider/do/deploy.yaml
