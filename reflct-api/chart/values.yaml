@@ -1,0 +1,33 @@
+appName: reflct-api
+
+image:
+  repository: 436630933245.dkr.ecr.ap-south-1.amazonaws.com/reflct-api
+  tag: latest
+  pullPolicy: Always
+
+replicaCount: 1
+
+service:
+  port: 8000
+
+env:
+  APP_ENV: dev
+  DEBUG: "False"
+  ALLOWED_HOSTS: "reflct-api.dev.tipsytypes.com,localhost"
+  CORS_ALLOWED_ORIGINS: "https://reflct.dev.tipsytypes.com"
+  FRONTEND_URL: "https://reflct.dev.tipsytypes.com"
+  BACKEND_URL: "https://reflct-api.dev.tipsytypes.com"
+  DB_PORT: "5432"
+  # Sensitive vars passed via --set in CI:
+  # SECRET_KEY, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST
+  # ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET
+  # ZOOM_SDK_KEY, ZOOM_SDK_SECRET, ZOOM_WEBHOOK_SECRET_TOKEN
+  # MAILTRAP_API_KEY, MAILTRAP_INBOX_ID
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

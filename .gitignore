@@ -2,3 +2,6 @@ temp
 .DS_Store
 terraform/.terraform/
 terraform/terraform.tfstate
+**/.env.dev
+**/.env.prod
+**/.env
