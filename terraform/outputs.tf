@@ -13,7 +13,12 @@ output "ssh_command" {
   value       = "ssh ubuntu@${aws_eip.k8s.public_ip}"
 }
 
-output "wildcard_dns" {
-  description = "Wildcard DNS record pointing to this instance"
-  value       = aws_route53_record.wildcard.name
+output "wildcard_dns_prod" {
+  description = "Wildcard DNS for prod (*.tipsytypes.com)"
+  value       = aws_route53_record.wildcard_prod.name
+}
+
+output "wildcard_dns_dev" {
+  description = "Wildcard DNS for dev (*.dev.tipsytypes.com)"
+  value       = aws_route53_record.wildcard_dev.name
 }

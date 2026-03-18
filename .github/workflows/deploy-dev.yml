@@ -79,10 +79,22 @@ jobs:
               | docker login --username AWS --password-stdin \
                 436630933245.dkr.ecr.ap-south-1.amazonaws.com
 
+            kubectl create namespace dev --dry-run=client -o yaml | kubectl apply -f -
+
+            # Refresh ECR pull secret (tokens expire every 12h)
+            kubectl create secret docker-registry ecr-secret \
+              --namespace dev \
+              --docker-server=436630933245.dkr.ecr.ap-south-1.amazonaws.com \
+              --docker-username=AWS \
+              --docker-password=$(aws ecr get-login-password --region ap-south-1) \
+              --dry-run=client -o yaml | kubectl apply -f -
+
             helm upgrade --install ${{ steps.vars.outputs.app }} ./${{ steps.vars.outputs.app }}/chart \
+              --namespace dev \
               --set image.repository="$IMAGE_REPO" \
               --set image.tag="$IMAGE_TAG" \
               --set image.pullPolicy=Always \
-              --atomic --timeout 3m
+              --set imagePullSecret=ecr-secret \
+              --timeout 10m
 
-            kubectl get pods -l app=${{ steps.vars.outputs.app }}
+            kubectl get pods -n dev -l app=${{ steps.vars.outputs.app }}

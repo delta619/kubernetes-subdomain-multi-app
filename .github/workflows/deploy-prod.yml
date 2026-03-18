@@ -49,13 +49,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy to prod EC2
+      - name: Deploy to prod namespace
         uses: appleboy/ssh-action@v1
         with:
-          host:        ${{ secrets.PROD_EC2_HOST }}
+          host:        ${{ secrets.DEV_EC2_HOST }}
           username:    ubuntu
           key:         ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-          timeout:     180s
+          timeout:     600s
           script: |
             set -e
 
@@ -66,17 +66,24 @@ jobs:
             IMAGE_REPO=$(echo "$IMAGE" | cut -d: -f1)
             IMAGE_TAG=$(echo "$IMAGE" | cut -d: -f2)
 
+            aws ecr get-login-password --region ap-south-1 \
+              | docker login --username AWS --password-stdin \
+                436630933245.dkr.ecr.ap-south-1.amazonaws.com
+
+            kubectl create namespace prod --dry-run=client -o yaml | kubectl apply -f -
+
             helm upgrade --install \
               "${{ env.APP }}" \
               "./${{ env.APP }}/chart" \
+              --namespace prod \
               --set image.repository="$IMAGE_REPO" \
               --set image.tag="$IMAGE_TAG" \
-              --set environment=prod \
+              --set image.pullPolicy=Always \
               --atomic \
               --timeout 5m
 
-            echo "Deployed ${{ env.APP }}:$IMAGE_TAG to PROD"
-            kubectl get pods -l app=${{ env.APP }}
+            echo "Deployed ${{ env.APP }}:$IMAGE_TAG to prod"
+            kubectl get pods -n prod -l app=${{ env.APP }}
 
       - name: Tag image as prod in ECR
         uses: aws-actions/configure-aws-credentials@v4

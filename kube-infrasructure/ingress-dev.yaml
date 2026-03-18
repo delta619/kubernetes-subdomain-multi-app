@@ -1,18 +1,16 @@
-# DEV ingress — deployed on the dev EC2 instance
-# Handles *.dev.tipsytypes.com routing
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: apps-ingress
+  namespace: dev
   annotations:
-    cert-manager.io/cluster-issuer: "letsencrypt-staging"  # uses staging cert on dev
+    cert-manager.io/cluster-issuer: "letsencrypt-staging"
     kubernetes.io/ingress.class: "nginx"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
   tls:
     - hosts:
         - pulse.dev.tipsytypes.com
-        # - api.dev.tipsytypes.com
       secretName: apps-tls-dev
   rules:
     - host: pulse.dev.tipsytypes.com
@@ -25,13 +23,3 @@ spec:
                 name: pulse-backend-service
                 port:
                   number: 8000
-    # - host: api.dev.tipsytypes.com
-    #   http:
-    #     paths:
-    #       - pathType: Prefix
-    #         path: "/"
-    #         backend:
-    #           service:
-    #             name: my-api-service
-    #             port:
-    #               number: 3000

@@ -1,9 +1,8 @@
-# PROD ingress — deployed on the prod EC2 instance
-# Handles *.tipsytypes.com routing to individual services
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: apps-ingress
+  namespace: prod
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
     kubernetes.io/ingress.class: "nginx"
@@ -12,9 +11,6 @@ spec:
   tls:
     - hosts:
         - pulse.tipsytypes.com
-        # Add more hosts here as you deploy more apps:
-        # - api.tipsytypes.com
-        # - app.tipsytypes.com
       secretName: apps-tls-prod
   rules:
     - host: pulse.tipsytypes.com
@@ -27,14 +23,3 @@ spec:
                 name: pulse-backend-service
                 port:
                   number: 8000
-    # Duplicate this block for each additional app:
-    # - host: api.tipsytypes.com
-    #   http:
-    #     paths:
-    #       - pathType: Prefix
-    #         path: "/"
-    #         backend:
-    #           service:
-    #             name: my-api-service
-    #             port:
-    #               number: 3000
