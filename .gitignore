@@ -1,5 +1,8 @@
 temp
 .DS_Store
+Reflct_backend_repo/
+Reflct_frontend_repo/
+Reflct API repo backend
 terraform/.terraform/
 terraform/terraform.tfstate
 **/.env.dev
