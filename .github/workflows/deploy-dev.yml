@@ -69,7 +69,7 @@ jobs:
           timeout:  600s
           script: |
             set -e
-            cd /home/ubuntu/infra && git pull
+            cd /home/ubuntu/infra && git fetch origin && git reset --hard origin/main
 
             IMAGE="${{ steps.build.outputs.image }}"
             IMAGE_REPO=$(echo "$IMAGE" | cut -d: -f1)

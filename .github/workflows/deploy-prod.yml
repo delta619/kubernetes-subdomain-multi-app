@@ -60,7 +60,7 @@ jobs:
             set -e
 
             cd /home/ubuntu/infra
-            git pull origin main
+            git fetch origin && git reset --hard origin/main
 
             IMAGE="${{ env.IMAGE }}"
             IMAGE_REPO=$(echo "$IMAGE" | cut -d: -f1)
