@@ -127,7 +127,7 @@ resource "aws_instance" "k8s" {
   }
 
   user_data = templatefile("${path.module}/bootstrap.sh.tpl", {
-    environment = "shared"
+    environment = "prod"
     domain      = var.domain
     aws_region  = var.aws_region
     infra_repo  = var.infra_repo_url

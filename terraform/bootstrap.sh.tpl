@@ -117,15 +117,10 @@ git clone ${infra_repo} /home/ubuntu/infra || true
 chown -R ubuntu:ubuntu /home/ubuntu/infra
 
 # ── Apply k8s infrastructure (issuers + ingress) ──────────────────────────────
-ISSUER_FILE="staging_issuer.yaml"
-INGRESS_FILE="ingress-dev.yaml"
-if [ "${environment}" = "prod" ]; then
-  ISSUER_FILE="prod_issuer.yaml"
-  INGRESS_FILE="echo_ingress.yaml"
-fi
+kubectl create namespace prod --dry-run=client -o yaml | kubectl apply -f -
 
-kubectl apply -f /home/ubuntu/infra/kube-infrasructure/$${ISSUER_FILE} || true
-kubectl apply -f /home/ubuntu/infra/kube-infrasructure/$${INGRESS_FILE} || true
+kubectl apply -f /home/ubuntu/infra/kube-infrasructure/prod_issuer.yaml || true
+kubectl apply -f /home/ubuntu/infra/kube-infrasructure/ingress-prod.yaml || true
 
 echo "=== Bootstrap complete $(date) ==="
 echo "k3s is ready. SSH in and run: sudo kubectl get pods -A"
