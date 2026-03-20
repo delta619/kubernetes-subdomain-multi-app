@@ -39,6 +39,11 @@ configs:
       password: "$${ECR_TOKEN}"
 EOF
 
+# Allow non-root users to read kubeconfig (needed for SSH deploy sessions)
+cat > /etc/rancher/k3s/config.yaml << EOF
+write-kubeconfig-mode: "0644"
+EOF
+
 # ── k3s (disable Traefik — using ingress-nginx instead) ───────────────────────
 curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server --disable=traefik" sh -
 
@@ -55,9 +60,6 @@ chown -R ubuntu:ubuntu /home/ubuntu/.kube
 chmod 600 /home/ubuntu/.kube/config
 echo 'export KUBECONFIG=/home/ubuntu/.kube/config' >> /home/ubuntu/.bashrc
 echo 'export KUBECONFIG=/home/ubuntu/.kube/config' >> /home/ubuntu/.profile
-
-# Allow non-root kubectl access (needed for SSH sessions that don't source .bashrc)
-chmod 644 /etc/rancher/k3s/k3s.yaml
 
 # Root uses k3s kubeconfig
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
