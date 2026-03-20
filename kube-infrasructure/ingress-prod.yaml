@@ -11,9 +11,13 @@ spec:
   tls:
     - hosts:
         - pulse.tipsytypes.com
+      secretName: pulse-tls-prod
+    - hosts:
         - reflct.tipsytypes.com
+      secretName: reflct-tls-prod
+    - hosts:
         - reflct-api.tipsytypes.com
-      secretName: apps-tls-prod
+      secretName: reflct-api-tls-prod
   rules:
     - host: pulse.tipsytypes.com
       http:
