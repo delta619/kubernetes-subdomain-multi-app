@@ -116,7 +116,7 @@ resource "aws_iam_instance_profile" "ec2_ecr" {
 # ── Single EC2 instance (hosts both dev + prod namespaces) ────────────────────
 resource "aws_instance" "k8s" {
   ami                    = data.aws_ami.ubuntu.id
-  instance_type          = "t3.micro"
+  instance_type          = "t3.small"
   key_name               = aws_key_pair.main.key_name
   vpc_security_group_ids = [aws_security_group.k8s.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2_ecr.name
