@@ -52,7 +52,12 @@ done
 mkdir -p /home/ubuntu/.kube
 cp /etc/rancher/k3s/k3s.yaml /home/ubuntu/.kube/config
 chown -R ubuntu:ubuntu /home/ubuntu/.kube
+chmod 600 /home/ubuntu/.kube/config
 echo 'export KUBECONFIG=/home/ubuntu/.kube/config' >> /home/ubuntu/.bashrc
+echo 'export KUBECONFIG=/home/ubuntu/.kube/config' >> /home/ubuntu/.profile
+
+# Allow non-root kubectl access (needed for SSH sessions that don't source .bashrc)
+chmod 644 /etc/rancher/k3s/k3s.yaml
 
 # Root uses k3s kubeconfig
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
