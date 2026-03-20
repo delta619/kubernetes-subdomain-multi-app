@@ -1,5 +1,5 @@
 #!/bin/bash
-# EC2 bootstrap: installs Docker, minikube, kubectl, helm, cert-manager
+# EC2 bootstrap: installs k3s, ingress-nginx, cert-manager
 # Runs once on first boot via EC2 user data.
 # Logs to /var/log/bootstrap.log
 
@@ -10,12 +10,11 @@ echo "=== Bootstrap started $(date) | env=${environment} | domain=${domain} ==="
 
 export DEBIAN_FRONTEND=noninteractive
 
-# ── System packages ──────────────────────────────────────────────────────────
+# ── System packages ───────────────────────────────────────────────────────────
 apt-get update -y
 apt-get install -y \
   apt-transport-https ca-certificates curl gnupg lsb-release \
-  conntrack socat ebtables ipset git jq unzip iptables-persistent \
-  awscli
+  git jq unzip awscli
 
 # Disable swap (k8s requirement)
 swapoff -a
@@ -25,76 +24,92 @@ sed -i '/ swap /s/^/#/' /etc/fstab
 echo "net.ipv4.ip_forward=1" >> /etc/sysctl.d/99-k8s.conf
 sysctl --system
 
-# ── Docker CE ────────────────────────────────────────────────────────────────
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
-  | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+# ── ECR registry config (written before k3s starts so no restart needed) ─────
+AWS_REGION="${aws_region}"
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+ECR_TOKEN=$(aws ecr get-login-password --region "$${AWS_REGION}")
+ECR_REGISTRY="$${ACCOUNT_ID}.dkr.ecr.$${AWS_REGION}.amazonaws.com"
 
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-  https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
-  > /etc/apt/sources.list.d/docker.list
+mkdir -p /etc/rancher/k3s
+cat > /etc/rancher/k3s/registries.yaml << EOF
+configs:
+  "$${ECR_REGISTRY}":
+    auth:
+      username: AWS
+      password: "$${ECR_TOKEN}"
+EOF
 
-apt-get update -y
-apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+# ── k3s (disable Traefik — using ingress-nginx instead) ───────────────────────
+curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server --disable=traefik" sh -
 
-systemctl enable --now docker
-usermod -aG docker ubuntu
+# Wait for node to be ready
+until kubectl get nodes 2>/dev/null | grep -q " Ready"; do
+  echo "Waiting for k3s node..."
+  sleep 5
+done
 
-# ── kubectl ──────────────────────────────────────────────────────────────────
-KUBECTL_VER=$(curl -sL https://dl.k8s.io/release/stable.txt)
-curl -sLO "https://dl.k8s.io/release/$${KUBECTL_VER}/bin/linux/amd64/kubectl"
-install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl && rm kubectl
+# Configure kubectl for ubuntu user
+mkdir -p /home/ubuntu/.kube
+cp /etc/rancher/k3s/k3s.yaml /home/ubuntu/.kube/config
+chown -R ubuntu:ubuntu /home/ubuntu/.kube
+echo 'export KUBECONFIG=/home/ubuntu/.kube/config' >> /home/ubuntu/.bashrc
 
-# ── minikube ─────────────────────────────────────────────────────────────────
-curl -sLO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
-install minikube-linux-amd64 /usr/local/bin/minikube && rm minikube-linux-amd64
+# Root uses k3s kubeconfig
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
-# ── helm ─────────────────────────────────────────────────────────────────────
+# ── helm ──────────────────────────────────────────────────────────────────────
 curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
-# ── Clone infra repo (helm charts live here) ─────────────────────────────────
-git clone ${infra_repo} /home/ubuntu/infra || true
-chown -R ubuntu:ubuntu /home/ubuntu/infra
+# ── ECR token refresh (tokens expire every 12 h) ──────────────────────────────
+cat > /usr/local/bin/refresh-ecr.sh << 'ECRSCRIPT'
+#!/bin/bash
+set -e
+AWS_REGION="${aws_region}"
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+ECR_REGISTRY="$${ACCOUNT_ID}.dkr.ecr.$${AWS_REGION}.amazonaws.com"
+ECR_TOKEN=$(aws ecr get-login-password --region "$${AWS_REGION}")
+cat > /etc/rancher/k3s/registries.yaml << EOF
+configs:
+  "$${ECR_REGISTRY}":
+    auth:
+      username: AWS
+      password: "$${ECR_TOKEN}"
+EOF
+systemctl restart k3s
+sleep 30  # wait for k3s to come back
+ECRSCRIPT
+chmod +x /usr/local/bin/refresh-ecr.sh
+echo "0 */6 * * * root /usr/local/bin/refresh-ecr.sh" >> /etc/crontab
 
-# ── Start minikube (docker driver, map host 80/443 → NodePorts 30080/30443) ──
-# The --ports flag tells Docker to bind host ports to the minikube container,
-# so external traffic on port 80 reaches NodePort 30080 inside minikube.
-sudo -u ubuntu minikube start \
-  --driver=docker \
-  --ports=80:30080,443:30443 \
-  --cpus=no-limit \
-  --memory=no-limit \
-  --kubernetes-version=stable
+# ── ingress-nginx (hostNetwork → binds directly to EC2 ports 80 / 443) ────────
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm repo update
+helm install ingress-nginx ingress-nginx/ingress-nginx \
+  --namespace ingress-nginx --create-namespace \
+  --set controller.hostNetwork=true \
+  --set controller.kind=DaemonSet \
+  --set controller.service.type=ClusterIP
 
-# Enable ingress and metrics addons
-sudo -u ubuntu minikube addons enable ingress
-sudo -u ubuntu minikube addons enable metrics-server
-
-# Wait for ingress controller
-sudo -u ubuntu kubectl wait \
+kubectl wait \
   --namespace ingress-nginx \
   --for=condition=ready pod \
   --selector=app.kubernetes.io/component=controller \
   --timeout=300s
 
-# Pin ingress-nginx NodePorts to 30080/30443 so Docker port map always matches
-sudo -u ubuntu kubectl patch svc ingress-nginx-controller \
-  -n ingress-nginx \
-  --type='json' \
-  -p='[
-    {"op":"replace","path":"/spec/ports/0/nodePort","value":30080},
-    {"op":"replace","path":"/spec/ports/1/nodePort","value":30443}
-  ]'
-
 # ── cert-manager ──────────────────────────────────────────────────────────────
 CERT_MGR_VER="v1.14.4"
-sudo -u ubuntu kubectl apply -f \
+kubectl apply -f \
   https://github.com/cert-manager/cert-manager/releases/download/$${CERT_MGR_VER}/cert-manager.yaml
 
-sudo -u ubuntu kubectl wait \
+kubectl wait \
   --namespace cert-manager \
   --for=condition=ready pod \
   --selector=app.kubernetes.io/instance=cert-manager \
   --timeout=300s
+
+# ── Clone infra repo (helm charts + k8s manifests live here) ──────────────────
+git clone ${infra_repo} /home/ubuntu/infra || true
+chown -R ubuntu:ubuntu /home/ubuntu/infra
 
 # ── Apply k8s infrastructure (issuers + ingress) ──────────────────────────────
 ISSUER_FILE="staging_issuer.yaml"
@@ -104,55 +119,8 @@ if [ "${environment}" = "prod" ]; then
   INGRESS_FILE="echo_ingress.yaml"
 fi
 
-sudo -u ubuntu kubectl apply -f /home/ubuntu/infra/kube-infrasructure/$${ISSUER_FILE}
-sudo -u ubuntu kubectl apply -f /home/ubuntu/infra/kube-infrasructure/$${INGRESS_FILE}
-
-# ── ECR login helper (refreshes every 12 hours) ───────────────────────────────
-cat > /usr/local/bin/ecr-login.sh << 'ECRSCRIPT'
-#!/bin/bash
-AWS_REGION="${aws_region}"
-ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-aws ecr get-login-password --region $AWS_REGION \
-  | docker login --username AWS --password-stdin \
-    $${ACCOUNT_ID}.dkr.ecr.$${AWS_REGION}.amazonaws.com
-ECRSCRIPT
-chmod +x /usr/local/bin/ecr-login.sh
-
-# Run ECR login now and schedule refresh
-/usr/local/bin/ecr-login.sh || echo "ECR login skipped (no ECR yet)"
-echo "0 */12 * * * ubuntu /usr/local/bin/ecr-login.sh" >> /etc/crontab
-
-# ── Systemd: restart minikube + re-apply port patch on reboot ─────────────────
-cat > /etc/systemd/system/minikube.service << 'UNIT'
-[Unit]
-Description=Minikube Kubernetes
-After=docker.service
-Requires=docker.service
-
-[Service]
-Type=forking
-User=ubuntu
-Group=ubuntu
-ExecStart=/usr/local/bin/minikube start --driver=docker --ports=80:30080,443:30443
-ExecStartPost=/bin/bash -c '\
-  sleep 30 && \
-  sudo -u ubuntu kubectl patch svc ingress-nginx-controller -n ingress-nginx \
-    --type=json \
-    -p=[{"op":"replace","path":"/spec/ports/0/nodePort","value":30080},{"op":"replace","path":"/spec/ports/1/nodePort","value":30443}] \
-  || true'
-ExecStop=/usr/local/bin/minikube stop
-RemainAfterExit=yes
-Restart=on-failure
-RestartSec=30
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-
-systemctl daemon-reload
-systemctl enable minikube
+kubectl apply -f /home/ubuntu/infra/kube-infrasructure/$${ISSUER_FILE} || true
+kubectl apply -f /home/ubuntu/infra/kube-infrasructure/$${INGRESS_FILE} || true
 
 echo "=== Bootstrap complete $(date) ==="
-echo "EC2 is ready. Access the cluster:"
-echo "  ssh ubuntu@<EC2-IP>"
-echo "  kubectl get pods -A"
+echo "k3s is ready. SSH in and run: sudo kubectl get pods -A"
