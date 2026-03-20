@@ -122,5 +122,28 @@ kubectl create namespace prod --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -f /home/ubuntu/infra/kube-infrasructure/prod_issuer.yaml || true
 kubectl apply -f /home/ubuntu/infra/kube-infrasructure/ingress-prod.yaml || true
 
+# ── App secrets ───────────────────────────────────────────────────────────────
+kubectl create secret generic reflct-api-secrets \
+  --namespace prod \
+  --from-literal=SECRET_KEY='REDACTED_SECRET_KEY' \
+  --from-literal=DB_NAME='neondb' \
+  --from-literal=DB_USER='neondb_owner' \
+  --from-literal=DB_PASSWORD='REDACTED_DB_PASSWORD' \
+  --from-literal=DB_HOST='ep-quiet-cloud-adp865hf-pooler.c-2.us-east-1.aws.neon.tech' \
+  --from-literal=DB_SSLMODE='require' \
+  --from-literal=MAILTRAP_API_KEY='REDACTED_MAILTRAP_API_KEY' \
+  --from-literal=MAILTRAP_INBOX_ID='2879532' \
+  --from-literal=MAILTRAP_FROM_EMAIL='hello@example.com' \
+  --from-literal=MAILTRAP_FROM_NAME='Mailtrap Test' \
+  --from-literal=ZOOM_ACCOUNT_ID='REDACTED_ZOOM_ACCOUNT_ID' \
+  --from-literal=ZOOM_CLIENT_ID='REDACTED_ZOOM_CLIENT_ID' \
+  --from-literal=ZOOM_CLIENT_SECRET='REDACTED_ZOOM_CLIENT_SECRET' \
+  --from-literal=ZOOM_SDK_KEY='REDACTED_ZOOM_SDK_KEY' \
+  --from-literal=ZOOM_SDK_SECRET='REDACTED_ZOOM_SDK_SECRET' \
+  --from-literal=ZOOM_WEBHOOK_SECRET_TOKEN='REDACTED_ZOOM_WEBHOOK_TOKEN' \
+  --from-literal=REDIS_URL='' \
+  --from-literal=CELERY_BROKER_URL='' \
+  --dry-run=client -o yaml | kubectl apply -f -
+
 echo "=== Bootstrap complete $(date) ==="
 echo "k3s is ready. SSH in and run: sudo kubectl get pods -A"
