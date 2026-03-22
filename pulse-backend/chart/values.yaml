@@ -1,8 +1,8 @@
 appName: pulse-backend
-environment: dev
+environment: production
 
 image:
-  repository: YOUR_ECR_ACCOUNT.dkr.ecr.ap-south-1.amazonaws.com/pulse-backend
+  repository: 436630933245.dkr.ecr.ap-south-1.amazonaws.com/pulse-backend
   tag: latest
   pullPolicy: Always
 
@@ -11,9 +11,24 @@ replicaCount: 1
 service:
   port: 8000
 
+# Non-sensitive env vars — injected via ConfigMap
 env:
-  PORT: "8000"
-  # DATABASE_URL: "" # set via --set env.DATABASE_URL=... in CI
+  APP_ENV: "production"
+  SERVER_PORT: "8000"
+  SERVER_APP_URL: "https://pulse.tipsytypes.com"
+  CORS_ORIGINS: "https://www.tipsytypes.com,https://tipsytypes.com,https://pulse.tipsytypes.com"
+  MONGODB_DATABASE: "pulse"
+  OPENAI_MODEL: "gpt-4o-mini"
+  SENDGRID_FROM_EMAIL: "newsletter@tipsytypes.com"
+  SENDGRID_FROM_NAME: "Pulse AI"
+  NEWSAPI_COUNTRY: "in"
+  NEWRELIC_APP_NAME: "daily-pulse"
+  SCHEDULER_NEWSLETTER_CRON: "0 8 * * *"
+  # Sensitive vars injected via K8s Secret (pulse-backend-secrets):
+  # MONGODB_URI, OPENAI_API_KEY, SENDGRID_API_KEY, NEWSAPI_API_KEY, NEWRELIC_LICENSE_KEY
+
+# Name of K8s secret to mount as env (created by CI before helm upgrade)
+secretName: "pulse-backend-secrets"
 
 resources:
   requests:

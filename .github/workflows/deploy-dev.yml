@@ -62,13 +62,21 @@ jobs:
 
       - name: Deploy to dev EC2
         uses: appleboy/ssh-action@v1
+        env:
+          PULSE_MONGODB_URI:        ${{ secrets.PULSE_MONGODB_URI }}
+          PULSE_OPENAI_API_KEY:     ${{ secrets.PULSE_OPENAI_API_KEY }}
+          PULSE_SENDGRID_API_KEY:   ${{ secrets.PULSE_SENDGRID_API_KEY }}
+          PULSE_NEWSAPI_API_KEY:    ${{ secrets.PULSE_NEWSAPI_API_KEY }}
+          PULSE_NEWRELIC_LICENSE_KEY: ${{ secrets.PULSE_NEWRELIC_LICENSE_KEY }}
         with:
           host:     ${{ secrets.DEV_EC2_HOST }}
           username: ubuntu
           key:      ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           timeout:  600s
+          envs:     PULSE_MONGODB_URI,PULSE_OPENAI_API_KEY,PULSE_SENDGRID_API_KEY,PULSE_NEWSAPI_API_KEY,PULSE_NEWRELIC_LICENSE_KEY
           script: |
             set -e
+            APP="${{ steps.vars.outputs.app }}"
             cd /home/ubuntu/infra && git fetch origin && git reset --hard origin/main
 
             IMAGE="${{ steps.build.outputs.image }}"
@@ -85,15 +93,27 @@ jobs:
               --docker-password=$(aws ecr get-login-password --region ap-south-1) \
               --dry-run=client -o yaml | kubectl apply -f -
 
-            helm upgrade --install ${{ steps.vars.outputs.app }} ./${{ steps.vars.outputs.app }}/chart \
+            # App-specific secrets
+            if [ "$APP" = "pulse-backend" ]; then
+              kubectl create secret generic pulse-backend-secrets \
+                --namespace prod \
+                --from-literal=MONGODB_URI="$PULSE_MONGODB_URI" \
+                --from-literal=OPENAI_API_KEY="$PULSE_OPENAI_API_KEY" \
+                --from-literal=SENDGRID_API_KEY="$PULSE_SENDGRID_API_KEY" \
+                --from-literal=NEWSAPI_API_KEY="$PULSE_NEWSAPI_API_KEY" \
+                --from-literal=NEWRELIC_LICENSE_KEY="$PULSE_NEWRELIC_LICENSE_KEY" \
+                --dry-run=client -o yaml | kubectl apply -f -
+            fi
+
+            helm upgrade --install $APP ./$APP/chart \
               --namespace prod \
               --set image.repository="$IMAGE_REPO" \
               --set image.tag="$IMAGE_TAG" \
               --set image.pullPolicy=Always \
               --set imagePullSecret=ecr-secret \
-              --set env.ADMIN_USERNAME=${{ secrets.ADMIN_USERNAME }} \
-              --set env.ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }} \
               --set env.APP_ENV=production \
               --timeout 10m
 
-            kubectl get pods -n prod -l app=${{ steps.vars.outputs.app }}
+            kubectl rollout restart deployment/${APP}-deployment -n prod
+            kubectl rollout status deployment/${APP}-deployment -n prod --timeout=5m
+            kubectl get pods -n prod -l app=$APP
