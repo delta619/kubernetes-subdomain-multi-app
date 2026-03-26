@@ -60,20 +60,25 @@ jobs:
           docker push $IMAGE
           echo "image=$IMAGE" >> $GITHUB_OUTPUT
 
-      - name: Deploy to dev EC2
+      - name: Deploy to EC2
         uses: appleboy/ssh-action@v1
         env:
-          PULSE_MONGODB_URI:        ${{ secrets.PULSE_MONGODB_URI }}
-          PULSE_OPENAI_API_KEY:     ${{ secrets.PULSE_OPENAI_API_KEY }}
-          PULSE_SENDGRID_API_KEY:   ${{ secrets.PULSE_SENDGRID_API_KEY }}
-          PULSE_NEWSAPI_API_KEY:    ${{ secrets.PULSE_NEWSAPI_API_KEY }}
+          PULSE_MONGODB_URI:          ${{ secrets.PULSE_MONGODB_URI }}
+          PULSE_OPENAI_API_KEY:       ${{ secrets.PULSE_OPENAI_API_KEY }}
+          PULSE_SENDGRID_API_KEY:     ${{ secrets.PULSE_SENDGRID_API_KEY }}
+          PULSE_NEWSAPI_API_KEY:      ${{ secrets.PULSE_NEWSAPI_API_KEY }}
           PULSE_NEWRELIC_LICENSE_KEY: ${{ secrets.PULSE_NEWRELIC_LICENSE_KEY }}
+          REFLCT_DB_HOST:             ${{ secrets.REFLCT_DB_HOST }}
+          REFLCT_DB_NAME:             ${{ secrets.REFLCT_DB_NAME }}
+          REFLCT_DB_USER:             ${{ secrets.REFLCT_DB_USER }}
+          REFLCT_DB_PASSWORD:         ${{ secrets.REFLCT_DB_PASSWORD }}
+          REFLCT_DB_SSLMODE:          ${{ secrets.REFLCT_DB_SSLMODE }}
         with:
           host:     ${{ secrets.DEV_EC2_HOST }}
           username: ubuntu
           key:      ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           timeout:  600s
-          envs:     PULSE_MONGODB_URI,PULSE_OPENAI_API_KEY,PULSE_SENDGRID_API_KEY,PULSE_NEWSAPI_API_KEY,PULSE_NEWRELIC_LICENSE_KEY
+          envs:     PULSE_MONGODB_URI,PULSE_OPENAI_API_KEY,PULSE_SENDGRID_API_KEY,PULSE_NEWSAPI_API_KEY,PULSE_NEWRELIC_LICENSE_KEY,REFLCT_DB_HOST,REFLCT_DB_NAME,REFLCT_DB_USER,REFLCT_DB_PASSWORD,REFLCT_DB_SSLMODE
           script: |
             set -e
             APP="${{ steps.vars.outputs.app }}"
@@ -102,6 +107,17 @@ jobs:
                 --from-literal=SENDGRID_API_KEY="$PULSE_SENDGRID_API_KEY" \
                 --from-literal=NEWSAPI_API_KEY="$PULSE_NEWSAPI_API_KEY" \
                 --from-literal=NEWRELIC_LICENSE_KEY="$PULSE_NEWRELIC_LICENSE_KEY" \
+                --dry-run=client -o yaml | kubectl apply -f -
+            fi
+
+            if [ "$APP" = "reflct-api" ]; then
+              kubectl create secret generic reflct-api-secrets \
+                --namespace prod \
+                --from-literal=DB_HOST="$REFLCT_DB_HOST" \
+                --from-literal=DB_NAME="$REFLCT_DB_NAME" \
+                --from-literal=DB_USER="$REFLCT_DB_USER" \
+                --from-literal=DB_PASSWORD="$REFLCT_DB_PASSWORD" \
+                --from-literal=DB_SSLMODE="$REFLCT_DB_SSLMODE" \
                 --dry-run=client -o yaml | kubectl apply -f -
             fi
 

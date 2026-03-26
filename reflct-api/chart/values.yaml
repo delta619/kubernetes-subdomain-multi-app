@@ -19,8 +19,9 @@ env:
   FRONTEND_URL: "https://reflct.tipsytypes.com"
   BACKEND_URL: "https://reflct-api.tipsytypes.com"
   DB_PORT: "5432"
-  # Sensitive vars passed via --set in CI:
-  # SECRET_KEY, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST
+  DB_SSLMODE: "require"
+  # Sensitive vars passed via --set in CI (injected as reflct-api-secrets k8s secret):
+  # SECRET_KEY, DB_HOST, DB_NAME, DB_USER, DB_PASSWORD
   # ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET
   # ZOOM_SDK_KEY, ZOOM_SDK_SECRET, ZOOM_WEBHOOK_SECRET_TOKEN
   # SENDGRID_API_KEY, FROM_EMAIL, FROM_NAME
