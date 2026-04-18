@@ -1,0 +1,30 @@
+appName: yt-streamer
+environment: production
+
+image:
+  repository: 436630933245.dkr.ecr.ap-south-1.amazonaws.com/yt-streamer
+  tag: latest
+  pullPolicy: Always
+
+imagePullSecret: "ecr-secret"
+
+replicaCount: 1
+
+# Non-sensitive config
+env:
+  S3_BUCKET: "your-videos-bucket"
+  S3_PREFIX: "videos/"
+  VIDEO_BITRATE: "3000k"
+  AWS_DEFAULT_REGION: "ap-south-1"
+
+# K8s secret name (created by CI before helm upgrade)
+# Must contain: YOUTUBE_STREAM_KEY, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+secretName: "yt-streamer-secrets"
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    cpu: 1500m
+    memory: 1Gi
