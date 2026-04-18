@@ -12,7 +12,7 @@ replicaCount: 1
 
 # Non-sensitive config
 env:
-  S3_BUCKET: "your-videos-bucket"
+  S3_BUCKET: "tipsytypes-yt-videos"
   S3_PREFIX: "videos/"
   VIDEO_BITRATE: "3000k"
   AWS_DEFAULT_REGION: "ap-south-1"
