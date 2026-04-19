@@ -5,7 +5,7 @@ set -e
 sudo apt-get update -y
 sudo apt-get install -y ffmpeg python3-pip
 
-pip3 install boto3 --break-system-packages
+pip3 install boto3
 
 # Copy streamer script
 sudo mkdir -p /opt/yt-streamer
