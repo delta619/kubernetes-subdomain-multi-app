@@ -23,8 +23,8 @@ secretName: "yt-streamer-secrets"
 
 resources:
   requests:
-    cpu: 500m
-    memory: 512Mi
+    cpu: 300m
+    memory: 256Mi
   limits:
-    cpu: 1500m
-    memory: 1Gi
+    cpu: 800m
+    memory: 512Mi

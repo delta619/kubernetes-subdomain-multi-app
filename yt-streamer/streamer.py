@@ -38,11 +38,12 @@ def download_video(key: str) -> str:
 def stream_video(path: str):
     cmd = [
         "ffmpeg", "-re", "-i", path,
-        "-c:v", "libx264", "-preset", "veryfast",
+        "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2",
+        "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency",
         "-b:v", BITRATE, "-maxrate", BITRATE,
         "-bufsize", "6000k", "-pix_fmt", "yuv420p",
-        "-g", "50",
-        "-c:a", "aac", "-b:a", "160k", "-ar", "44100",
+        "-g", "50", "-r", "30",
+        "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
         "-f", "flv", RTMP_URL,
     ]
     logging.info("Streaming: %s", path)
